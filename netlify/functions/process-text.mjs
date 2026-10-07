@@ -60,9 +60,10 @@ Rules:
 5. In translate mode, provide a faithful natural translation in the target language.
 6. In notes mode, produce concise structured notes and a short summary in the target language when a target language is provided; otherwise use the source language.
 7. In dictate mode, leave translation, summary, and notes as empty strings.
-8. Do not mention that you are an AI unless the user content itself requires it.
-9. Do not add opinions or conclusions not supported by the input.
-10. Prefer natural written language over word-for-word speech fillers, but do not erase meaningful qualifiers or uncertainty.`;
+8. If the transcript contains an obvious accidental adjacent repetition caused by speech recognition (for example, the same phrase copied twice with no meaningful change), remove only the accidental duplicate. Preserve intentional repetition used for emphasis or meaning.
+9. Do not mention that you are an AI unless the user content itself requires it.
+10. Do not add opinions or conclusions not supported by the input.
+11. Prefer natural written language over word-for-word speech fillers, but do not erase meaningful qualifiers or uncertainty.`;
 }
 
 export default async (request) => {

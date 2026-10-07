@@ -229,8 +229,16 @@ class MainActivity : AppCompatActivity() {
     private fun startRecordingNow() {
         if (isRecording) return
 
+        suppressTranscriptWatcher = true
+        binding.transcript.setText("")
+        suppressTranscriptWatcher = false
         binding.outputText.text = ""
+        binding.notesText.text = ""
+        binding.summaryText.text = ""
+        binding.warningsText.text = ""
         binding.outputPanel.visibility = View.GONE
+        prefs.edit().remove("last_transcript").apply()
+        updateWordCount()
         showStatus("Starting…")
 
         prefs.edit()

@@ -27,7 +27,6 @@ export default async (request) => {
     const form = await request.formData();
     const audio = form.get("audio");
     const language = String(form.get("language") ?? "").trim();
-    const previousContext = String(form.get("previousContext") ?? "").trim();
 
     if (!(audio instanceof File)) {
       return json(400, { error: "audio file is required." });
@@ -41,17 +40,9 @@ export default async (request) => {
     upstreamForm.append("file", audio, audio.name || "chunk.wav");
     upstreamForm.append("model", "gpt-4o-transcribe");
     upstreamForm.append("response_format", "json");
-    upstreamForm.append("temperature", "0");
 
     if (language && language !== "auto") {
       upstreamForm.append("language", language);
-    }
-
-    if (previousContext) {
-      upstreamForm.append(
-        "prompt",
-        `This is a continuation of a longer dictation. Use this previous context only to help recognize names, terminology, and sentence continuity. Do not copy it into the new transcript.\n\nPrevious context:\n${previousContext.slice(-2500)}`,
-      );
     }
 
     const upstream = await fetch("https://api.openai.com/v1/audio/transcriptions", {

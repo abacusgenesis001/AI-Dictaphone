@@ -14,9 +14,10 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import java.io.BufferedOutputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -56,7 +57,6 @@ class RecordingService : Service() {
     private var chunkSequence = 0
     private var serverUrl = ""
     private var sourceLanguage = "auto"
-    private var rollingContext = ""
     private lateinit var sessionDir: File
     private lateinit var transcriptFile: File
 
@@ -93,7 +93,6 @@ class RecordingService : Service() {
 
         sessionId = UUID.randomUUID().toString()
         chunkSequence = 0
-        rollingContext = ""
         sessionDir = File(filesDir, "sessions/$sessionId/pending")
         if (!sessionDir.exists()) sessionDir.mkdirs()
         transcriptFile = File(sessionDir.parentFile, "raw-transcript.txt")
@@ -153,19 +152,18 @@ class RecordingService : Service() {
                     baseUrl = serverUrl,
                     audioFile = file,
                     language = sourceLanguage,
-                    previousContext = rollingContext,
                 )
 
-                if (result.text.isNotBlank()) {
-                    appendTranscript(result.text)
-                    rollingContext = (rollingContext + " " + result.text).takeLast(2500)
+                val appendedText = appendTranscript(result.text)
+                if (appendedText.isNotBlank()) {
                     sendBroadcast(Intent(ACTION_TRANSCRIPT).apply {
                         setPackage(packageName)
-                        putExtra(EXTRA_TEXT, result.text)
+                        putExtra(EXTRA_TEXT, appendedText)
                         putExtra(EXTRA_SESSION_ID, sessionId)
                         putExtra(EXTRA_SEQUENCE, chunkSequence)
                     })
                 }
+
                 if (file.exists()) file.delete()
                 return
             } catch (e: Exception) {
@@ -177,12 +175,75 @@ class RecordingService : Service() {
         sendError("A segment could not be transcribed: ${lastError ?: "unknown error"}. It is kept locally for retry.")
     }
 
-    private fun appendTranscript(text: String) {
+    /**
+     * Appends only the new portion of a transcription result. If the speech
+     * service accidentally repeats the end of the previous result at a chunk
+     * boundary, that overlapping prefix is removed before it is stored or sent
+     * to the UI.
+     */
+    private fun appendTranscript(text: String): String {
         val clean = text.trim()
-        if (clean.isBlank()) return
-        val existing = if (transcriptFile.exists()) transcriptFile.readText().trim() else ""
-        val separator = if (existing.isEmpty() || existing.endsWith("\n")) "" else " "
-        transcriptFile.appendText(separator + clean)
+        if (clean.isBlank()) return ""
+
+        val existing = if (transcriptFile.exists()) {
+            transcriptFile.readText().trim()
+        } else {
+            ""
+        }
+
+        val delta = removeBoundaryOverlap(existing, clean)
+        if (delta.isBlank()) return ""
+
+        val separator = if (existing.isEmpty()) "" else " "
+        transcriptFile.appendText(separator + delta)
+        return delta
+    }
+
+    private fun removeBoundaryOverlap(existing: String, incoming: String): String {
+        if (existing.isBlank() || incoming.isBlank()) return incoming
+
+        val existingWords = existing.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val incomingWords = incoming.split(Regex("\\s+")).filter { it.isNotBlank() }
+
+        if (incomingWords.isEmpty()) return ""
+
+        val maxOverlap = minOf(existingWords.size, incomingWords.size, 40)
+        var bestOverlap = 0
+
+        for (size in maxOverlap downTo 1) {
+            val suffix = existingWords.takeLast(size)
+            val prefix = incomingWords.take(size)
+            if (suffix.size != prefix.size) continue
+
+            var matches = true
+            for (index in suffix.indices) {
+                if (normalizeToken(suffix[index]) != normalizeToken(prefix[index])) {
+                    matches = false
+                    break
+                }
+            }
+
+            if (matches) {
+                bestOverlap = size
+                break
+            }
+        }
+
+        // Only treat a multi-word boundary match as accidental overlap. A
+        // one-word match is often legitimate repeated speech (for example,
+        // “yes” followed by another “yes”). Full duplicate results are safe to
+        // suppress even when they contain only one or two words.
+        val fullDuplicate = bestOverlap == incomingWords.size
+        if (bestOverlap < 3 && !fullDuplicate) return incoming
+
+        return incomingWords.drop(bestOverlap).joinToString(" ")
+    }
+
+    private fun normalizeToken(token: String): String {
+        return token
+            .lowercase(Locale.US)
+            .trim()
+            .trim('.', ',', '!', '?', ':', ';', '"', '\'')
     }
 
     private fun recordLoop() {
@@ -209,7 +270,7 @@ class RecordingService : Service() {
 
             while (recording) {
                 val file = File(sessionDir, String.format("chunk-%05d.wav", chunkSequence++))
-                val rawBytes = java.io.ByteArrayOutputStream()
+                val rawBytes = ByteArrayOutputStream()
                 val startedAt = System.currentTimeMillis()
 
                 while (recording && System.currentTimeMillis() - startedAt < CHUNK_MILLIS) {
