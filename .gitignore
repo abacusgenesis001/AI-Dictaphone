@@ -1,0 +1,18 @@
+# Node
+node_modules/
+.netlify/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Android
+.gradle/
+.idea/
+*/build/
+local.properties
+*.iml
+
+# OS
+.DS_Store

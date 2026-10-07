@@ -1,0 +1,8 @@
+{
+  "name": "ai-dictaphone-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check netlify/functions/health.mjs && node --check netlify/functions/transcribe-chunk.mjs && node --check netlify/functions/process-text.mjs"
+  }
+}

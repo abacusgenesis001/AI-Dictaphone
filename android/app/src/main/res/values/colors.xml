@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0F131A</color>
+    <color name="panel">#171C25</color>
+    <color name="panel_edge">#242B37</color>
+    <color name="paper">#F4EFE3</color>
+    <color name="paper_edge">#E4DCC8</color>
+    <color name="ink">#211E19</color>
+    <color name="ink_soft">#5B584F</color>
+    <color name="muted">#8C93A3</color>
+    <color name="muted_2">#565D6C</color>
+    <color name="amber">#E8A33E</color>
+    <color name="teal">#54B6A9</color>
+    <color name="danger">#D9705F</color>
+    <color name="white">#F1EEE7</color>
+</resources>
